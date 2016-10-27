@@ -1,0 +1,13 @@
+{{> licenceInfo}}
+
+package {{invokerPackage}};
+
+import java.util.function.Function;
+
+@FunctionalInterface
+public interface TypeConverter<A, B> extends Function<A, B> {
+
+	B convert(A a);
+
+	default B apply(A a) { return convert(a); }
+}

@@ -1,0 +1,1330 @@
+swagger: '2.0'
+info:
+  title: Gecad ePayment API
+  description: |
+    ALU, short for Automatic Live Update, is intended for merchants who want to place transactions directly in the PayU system. The main advantage that ALU presents is that it allows the Merchant to also send the Shopper card data.
+    This approach allows merchants full control over their shoppers' experience, meaning that ALU:
+    * Is easy to integrate
+    * Allows custom page design
+    * Is very secure
+  version: "3.0"
+host: secure.payu.ro
+schemes:
+  - https
+paths:
+  /order/alu/v3:
+    post:
+      summary: Create a new order via ALU v3
+      operationId: createOrder
+      consumes:
+        - application/x-www-form-urlencoded
+      produces:
+        - application/xml
+      parameters:
+        - name: MERCHANT
+          in: formData
+          required: true
+          type: string
+          description: |
+            The Merchant's ID, available in Control Panel
+            (Account Management / Account Settings)
+        - name: ORDER_REF
+          in: formData
+          required: true
+          type: string
+          description: |
+            Order external reference number in Merchant's system
+        - name: ORDER_DATE
+          in: formData
+          required: true
+          type: string
+          format: date-time
+          description: |
+            The date when the order is initiated in the system,
+            in YYYY-MM-DD HH:MM:SS format (e.g.: "2012-05-01 21:15:45")
+            Important: Date should be UTC standard +/-10 minutes
+        - name: PAY_METHOD
+          in: formData
+          required: false
+          type: string
+          default: 'CCVISAMC'
+          description: |
+            Payment method for the order. Possible values: CCVISAMC -
+            Visa/Mastercard credit card (default), WIRE, UPT, BKM, QIWI,
+            PAYU_CREDIT, QBANK, COMPAY, TINKOFF_LOAN
+        - name: BACK_REF
+          in: formData
+          required: false
+          type: string
+          description: |
+            Return URL on the Merchant webshop side that will be used in case
+            of 3DS enrolled cards authorizations or for Pay By Link (PBL)
+            payment methods (such as BKM, QIWI, PayU Credit, QBank, Compay, Tinkoff Loan).
+        - name: ORDER_HASH
+          in: formData
+          description: |
+            HMAC_MD5 signature applied on all parameters from the request.
+            Source string for HMAC_MD5 will be calculated by adding
+            the length of each field value at the beginning of field value.
+
+            A common key shared between PayU and the merchant is used
+            for the signature. Find more details on how is HASH generated here.
+          required: false
+          type: string
+          x-payu-parameter-hash: {
+            algorithm : "HmacMD5",
+            includeEmpty: true,
+            includeParamsLength: true,
+            parameterOrder: 'alphabetically',
+            parameters: [],
+            skipParameters: []
+          }
+        - name: BILL_LNAME
+          in: formData
+          required: true
+          type: string
+          description: |
+            Shopper's last name
+        - name: BILL_FNAME
+          in: formData
+          required: true
+          type: string
+          description: |
+            Shopper's first name
+        - name: BILL_EMAIL
+          in: formData
+          required: true
+          type: string
+          description: Email address of the Shopper
+        - name: BILL_PHONE
+          in: formData
+          required: true
+          type: string
+          description: |
+            Shopper's phone number
+        - name: BILL_COUNTRYCODE
+          in: formData
+          required: true
+          type: string
+          description: |
+            Shopper's country code in two letters, ISO format
+        - name: BILL_CITYPE
+          in: formData
+          required: false
+          type: string
+          enum:
+            - PERSONALID
+            - PASSPORT
+            - DRVLICENSE
+          description: |
+            Shopper's ID type - mandatory for UPT. Accepted values:
+            * PERSONALID (identity card),
+            * PASSPORT (passport),
+            * DRVLICENSE (driving license)
+        - name: BILL_CINUMBER
+          in: formData
+          required: false
+          type: string
+          description: |
+            Shopper's ID number (for the specified ID type)
+        - name: CC_NUMBER
+          description: |
+            The card number on which the order authorization will be made.
+          required: false
+          type: string
+          in: formData
+        - name: EXP_MONTH
+          description: |
+            The month in which the card used expires
+          required: false
+          type: string
+          in: formData
+        - name: EXP_YEAR
+          description: |
+            The year in which the card used expires
+          type: string
+          in: formData
+          required: false
+        - name: CC_CVV
+          description: |
+            The CCV/CVV2 code for the card. For some card types or based on merchant settings
+            this can be empty, otherwise it should have a numerical value.
+          type: string
+          in: formData
+          required: false
+        - name: CC_OWNER
+          description: |
+            The card owner name, as it appears on the card.
+          type: string
+          in: formData
+          required: false
+        - name: CC_TOKEN
+          description: |
+            The token provided by Modal Checkout.
+          type: string
+          in: formData
+          required: false
+        - name: SELECTED_INSTALLMENTS_NUMBER
+          description: |
+            The number of installments. It can be an integer between 1 and 12.
+          type: integer
+          in: formData
+          required: false
+        - name: CARD_PROGRAM_NAME
+          description: |
+            The name of card program that allows paying an order using installments.
+          type: string
+          in: formData
+          required: false
+        - name: ORDER_TIMEOUT
+          description: |
+            The time in seconds after which the order will expire.
+          type: integer
+          in: formData
+          required: false
+        - name: USE_LOYALTY_POINTS
+          description: |
+            A string with value YES. The order will be paid using loyalty points.
+            It can be used for one time payments and (only when the LOYALTY_POINTS_AMOUNT
+            parameter is set and smaller than order total amount) also for installments payments.
+          type: string
+          in: formData
+          required: false
+        - name: LOYALTY_POINTS_AMOUNT
+          description: |
+            A positive number indicating the money amount worth of loyalty points to be used
+            for payment. It can be used only together with USE_LOYALTY_POINTS parameter (set to YES).
+          type: number
+          in: formData
+          required: false
+        - name: CAMPAIGN_TYPE
+          description: |
+            A predefined string value indicating the type of campaign to be used. It can only have
+            one of the following values: EXTRA_INSTALLMENTS or DELAY_INSTALLMENTS.
+
+            For bank terminals supporting both campaign types used at the same time, you can set b
+            oth comma separated values, e.g: EXTRA_INSTALLMENTS,DELAY_INSTALLMENTS.
+
+            Must be used only with installments transactions (the SELECTED_INSTALLMENTS_NUMBER parameter
+            must be greater than or equal to 2).
+          type: string
+          in: formData
+          required: false
+        - name: ORDER_SHIPPING
+          description: |
+            A positive number indicating the price of shipping.
+            The currency is set by PRICES_CURRENCY.
+          type: number
+          in: formData
+          required: false
+        - name: POS_CODE
+          description: |
+            Optional field used to define orders made through a specific POS.
+            Sent value should be previously confirmed with operation team.
+          type: string
+          in: formData
+          required: false
+        - name: BILL_FAX
+          description: |
+            Shopper's fax number.
+          type: string
+          in: formData
+          required: false
+        - name: BILL_ADDRESS
+          description: |
+            Shopper's address.
+          type: string
+          in: formData
+          required: true
+        - name: BILL_ADDRESS2
+          description: |
+            Shopper's address (second line).
+          type: string
+          in: formData
+          required: false
+        - name: BILL_ZIPCODE
+          description: |
+            Address zip code.
+          type: string
+          in: formData
+          required: true
+        - name: BILL_CITY
+          description: |
+            City.
+          type: string
+          in: formData
+          required: true
+        - name: BILL_STATE
+          description: |
+            State / Dept.
+          type: string
+          in: formData
+          required: false
+        - name: DELIVERY_LNAME
+          description: |
+            Last name of the person where the order will be delivered
+          type: string
+          in: formData
+          required: true
+        - name: DELIVERY_FNAME
+          description: |
+            First name of the person where the order will be delivered
+          type: string
+          in: formData
+          required: true
+        - name: DELIVERY_EMAIL
+          description: |
+            Email address of the person or company where the order will be delivered
+          type: string
+          in: formData
+          required: false
+        - name: DELIVERY_PHONE
+          description: |
+            The phone of the person of company where the order will be delivered.
+          type: string
+          in: formData
+          required: true
+        - name: DELIVERY_COMPANY
+          description: |
+            Company name where the order will be delivered.
+          type: string
+          in: formData
+          required: false
+        - name: DELIVERY_ADDRESS
+          description: |
+            Order delivery address.
+          type: string
+          in: formData
+          required: true
+        - name: DELIVERY_ADDRESS2
+          description: |
+            More details on order delivery address.
+          type: string
+          in: formData
+          required: false
+        - name: DELIVERY_ZIPCODE
+          description: |
+            Order delivery address zip code.
+          type: string
+          in: formData
+          required: true
+        - name: DELIVERY_CITY
+          description: |
+            Order delivery city.
+          type: string
+          in: formData
+          required: true
+        - name: DELIVERY_STATE
+          description: |
+            Order delivery state.
+          type: string
+          in: formData
+          required: true
+        - name: DELIVERY_COUNTRYCODE
+          description: |
+            Delivery country code in two letters ISO format.
+          type: string
+          in: formData
+          required: true
+        - name: LU_ENABLE_TOKEN
+          description: |
+            Enable Token payments for the order. For the initial transaction, we have this parameter set to 1
+          type: string
+          in: formData
+          required: false
+        - name: LU_TOKEN_TYPE
+          description: |
+            The type of the token. For the initial transaction, we have this parameter set to PAY_BY_CLICK
+          type: string
+          in: formData
+          required: false
+        - name: CC_NUMBER_TIME
+          description: |
+            Time spent by user to insert card number
+          type: string
+          in: formData
+          required: false
+        - name: CC_OWNER_TIME
+          description: |
+            Time spent by user to insert card owner
+          type: string
+          in: formData
+          required: false
+        - name: CLIENT_IP
+          description: |
+            IP address of the Shopper
+          type: string
+          in: formData
+          required: false
+        - name: CLIENT_TIME
+          description: |
+            Time collected from the Shopper's browser in YYYY-MM-DD hh:mm:ss format
+          type: string
+          format: date-time
+          in: formData
+          required: false
+        - name: PRICES_CURRENCY
+          description: |
+            The currency in which the prices are expressed, for example TRY
+            If the parameter is not specified, the default value is the default currency of the Merchant.
+          required: false
+          type: string
+          in: formData
+
+        # Array filled with the product names (minimum length: 2 characters - maximum length: 155 characters / per product name)
+        # Product #1
+        - name: ORDER_PNAME[0]
+          description: Product name
+          type: string
+          in: formData
+          required: true
+          minimum: 2
+          maximum: 155
+        - name: ORDER_PCODE[0]
+          description: |
+            Product code. If multiple products are sent (in the same or subsequent transactions)
+            with the same product code, PayU will update the product with
+            the corresponding ORDER_PCODE[] (overwriting all the other product information - name, price, taxes).
+          type: string
+          in: formData
+          required: true
+          maximum: 50
+        - name: ORDER_PRICE[0]
+          description: Unit price for product. Default currency is set by PRICES_CURRENCY, described below.
+          type: number
+          required: true
+          in: formData
+        - name: ORDER_VAT[0]
+          description: VAT value for product
+          type: number
+          required: false
+          in: formData
+        - name: ORDER_PRICE_TYPE[0]
+          description: |
+            Specify if ORDER_PRICE[0] parameter includes VAT or not.
+             * GROSS (VAT is included)
+             * NET (VAT will be added by PayU)
+          default: 'NET'
+          type: string
+          enum:
+            - GROSS
+            - NET
+          required: false
+          in: formData
+        - name: ORDER_QTY[0]
+          description: Product quantity
+          type: integer
+          required: true
+          in: formData
+        - name: ORDER_PINFO[0]
+          description: |
+            Product additional information
+          type: string
+          in: formData
+          required: false
+        - name: ORDER_VER[0]
+          description: |
+            Product ... version?
+          type: string
+          in: formData
+          required: false
+
+        # Product #2
+        - name: ORDER_PNAME[1]
+          description: |
+            Product #2
+          type: string
+          in: formData
+          required: false
+          minimum: 2
+          maximum: 155
+        - name: ORDER_PCODE[1]
+          description: |
+            Product #2
+          type: string
+          in: formData
+          required: false
+          maximum: 50
+        - name: ORDER_PRICE[1]
+          description: |
+            Product #2
+          type: number
+          required: false
+          in: formData
+        - name: ORDER_VAT[1]
+          description: |
+            Product #2
+          type: number
+          required: false
+          in: formData
+        - name: ORDER_PRICE_TYPE[1]
+          description: |
+            Product #2
+          default: 'NET'
+          type: string
+          enum:
+            - GROSS
+            - NET
+          required: false
+          in: formData
+        - name: ORDER_QTY[1]
+          description: |
+            Product #2
+          type: integer
+          required: false
+          in: formData
+        - name: ORDER_PINFO[1]
+          description: |
+            Product #2
+          type: string
+          in: formData
+          required: false
+        - name: ORDER_VER[1]
+          description: |
+            Product #2
+          type: string
+          in: formData
+          required: false
+        # Product #3
+        - name: ORDER_PNAME[2]
+          description: |
+            Product #3
+          type: string
+          in: formData
+          required: false
+          minimum: 2
+          maximum: 155
+        - name: ORDER_PCODE[2]
+          description: |
+            Product #3
+          type: string
+          in: formData
+          required: false
+          maximum: 50
+        - name: ORDER_PRICE[2]
+          description: |
+            Product #3
+          type: number
+          required: false
+          in: formData
+        - name: ORDER_VAT[2]
+          description: |
+            Product #3
+          type: number
+          required: false
+          in: formData
+        - name: ORDER_PRICE_TYPE[2]
+          description: |
+            Product #3
+          default: 'NET'
+          type: string
+          enum:
+            - GROSS
+            - NET
+          required: false
+          in: formData
+        - name: ORDER_QTY[2]
+          description: |
+            Product #3
+          type: integer
+          required: false
+          in: formData
+        - name: ORDER_PINFO[2]
+          description: |
+            Product #3
+          type: string
+          in: formData
+          required: false
+        - name: ORDER_VER[2]
+          description: |
+            Product #3
+          type: string
+          in: formData
+          required: false
+        # Product #4
+        - name: ORDER_PNAME[3]
+          description: |
+            Product #4
+          type: string
+          in: formData
+          required: false
+          minimum: 2
+          maximum: 155
+        - name: ORDER_PCODE[3]
+          description: |
+            Product #4
+          type: string
+          in: formData
+          required: false
+          maximum: 50
+        - name: ORDER_PRICE[3]
+          description: |
+            Product #4
+          type: number
+          required: false
+          in: formData
+        - name: ORDER_VAT[3]
+          description: |
+            Product #4
+          type: number
+          required: false
+          in: formData
+        - name: ORDER_PRICE_TYPE[3]
+          description: |
+            Product #4
+          default: 'NET'
+          type: string
+          enum:
+            - GROSS
+            - NET
+          required: false
+          in: formData
+        - name: ORDER_QTY[3]
+          description: |
+            Product #4
+          type: integer
+          required: false
+          in: formData
+        - name: ORDER_PINFO[3]
+          description: |
+            Product #4
+          type: string
+          in: formData
+          required: false
+        - name: ORDER_VER[4]
+          description: |
+            Product #4
+          type: string
+          in: formData
+          required: false
+        # Product #5
+        - name: ORDER_PNAME[4]
+          description: |
+            Product #5
+          type: string
+          in: formData
+          required: false
+          minimum: 2
+          maximum: 155
+        - name: ORDER_PCODE[4]
+          description: |
+            Product #5
+          type: string
+          in: formData
+          required: false
+          maximum: 50
+        - name: ORDER_PRICE[4]
+          description: |
+            Product #5
+          type: number
+          required: false
+          in: formData
+        - name: ORDER_VAT[4]
+          description: |
+            Product #5
+          type: number
+          required: false
+          in: formData
+        - name: ORDER_PRICE_TYPE[4]
+          description: |
+            Product #5
+          default: 'NET'
+          type: string
+          enum:
+            - GROSS
+            - NET
+          required: false
+          in: formData
+        - name: ORDER_QTY[4]
+          description: |
+            Product #5
+          type: integer
+          required: false
+          in: formData
+        - name: ORDER_PINFO[4]
+          description: |
+            Product #5
+          type: string
+          in: formData
+          required: false
+        - name: ORDER_VER[4]
+          description: |
+            Product #5
+          type: string
+          in: formData
+          required: false
+
+        # Product #6
+        - name: ORDER_PNAME[5]
+          description: |
+            Product #6
+          type: string
+          in: formData
+          required: false
+          minimum: 2
+          maximum: 155
+        - name: ORDER_PCODE[5]
+          description: |
+            Product #6
+          type: string
+          in: formData
+          required: false
+          maximum: 50
+        - name: ORDER_PRICE[5]
+          description: |
+            Product #6
+          type: number
+          required: false
+          in: formData
+        - name: ORDER_VAT[5]
+          description: |
+            Product #6
+          type: number
+          required: false
+          in: formData
+        - name: ORDER_PRICE_TYPE[5]
+          description: |
+            Product #6
+          default: 'NET'
+          type: string
+          enum:
+            - GROSS
+            - NET
+          required: false
+          in: formData
+        - name: ORDER_QTY[5]
+          description: |
+            Product #6
+          type: integer
+          required: false
+          in: formData
+        - name: ORDER_PINFO[5]
+          description: |
+            Product #6
+          type: string
+          in: formData
+          required: false
+        - name: ORDER_VER[5]
+          description: |
+            Product #6
+          type: string
+          in: formData
+          required: false
+
+        # Product #7
+
+        # Product #8
+
+        # Product #9
+
+        # Product #10
+
+      responses:
+        200:
+          description: |
+            The PayU system will respond in the XML format detailed below.
+            The Merchant has to parse and process data from this XML on his backend.
+            In case of 3DS, the same data is sent as HTTP POST to the BACK_REF url.
+          schema:
+            $ref: '#/definitions/AluResponseRaw'
+        default:
+          description: Unexpected error
+          schema:
+            $ref: '#/definitions/Error'
+definitions:
+  AluResponseRaw:
+    type: object
+    x-extraAnnotation: "@javax.xml.bind.annotation.XmlRootElement(name = \"EPAYMENT\") @javax.xml.bind.annotation.XmlAccessorType(javax.xml.bind.annotation.XmlAccessType.FIELD)"
+    properties:
+      REFNO:
+        type: string
+        description: |
+          Global PayU reference number for the order.
+          This is unique across all requests. If any of the required parameters
+          is missing, this will be empty!
+      ALIAS:
+        type: string
+        description: |
+          Unique string representation of the transaction that
+          can be used by the Merchant in his backend.
+      STATUS:
+        type: string
+        enum:
+          - SUCCESS
+          - FAILED
+          - INPUT_ERROR
+        description: |
+          Possible values
+           * SUCCESS - If the payment was authorized. In this case also REFNO is returned (see response sample)
+           * FAILED - If the payment could NOT be authorized for various reasons (fraud, insufficient funds etc.). In this case a REFNO is returned, but the payment is Pending (see response sample)
+           * INPUT_ERROR - If the payment request has erroneous or missing required parameters (see response sample)
+      RETURN_CODE:
+        type: string
+        description: All the possible codes
+      RETURN_MESSAGE:
+        type: string
+        description: A more detailed description of the response code
+      DATE:
+        type: string
+        description: Date of the response in UTC format
+        format: date-time
+        x-field-extraAnnotation: "@javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter(UTCDateTimeAdapter.class)"
+      URL_3DS:
+        type: string
+        description: In case that the credit card is enrolled in 3D Secure system, this parameter will contain an URL where the Merchant should redirect the browser of the Shopper (see response sample).
+        x-field-extraAnnotation: "@javax.xml.bind.annotation.XmlElement(name = \"URL_3DS\")"
+      AMOUNT:
+        type: string
+        description: Total transacted amount
+      CURRENCY:
+        type: string
+        description: The currency in which the order has been processed
+      INSTALLMENTS_NO:
+        type: string
+        description: The number of installments
+      CARD_PROGRAM_NAME:
+        type: string
+        description: The name of card program used for paying the order
+      ORDER_REF:
+        type: string
+        description: Order external reference number in Merchant's system
+      AUTH_CODE:
+        type: string
+        description: Bank authorization code
+      RRN:
+        type: string
+        description: Retrieval reference number
+      WIRE_ACCOUNTS:
+        type: array
+        items:
+          $ref: '#/definitions/WireAccountRaw'
+        description: |
+          Contains an array of bank accounts used for paying in WIRE method.
+          In case of other payment methods the node will be missing.
+      HASH:
+        type: string
+        description: |
+          Signature applied for the all elements from the request using
+          the same algorithm as the signature from the initial request.
+
+          Parameters must be concatenated in the order presented above.
+          URL_3DS is not included in the signature.
+          If the signature is NOT correct you'll get a HASH_MISMATCH error
+          and the HASH tag will be empty.
+        x-payu-parameter-hash: {
+          algorithm : "HmacMD5",
+          includeEmpty: true,
+          includeParamsLength: true,
+          parameterOrder: 'fixed',
+          parameters: [
+            'REFNO', 'ALIAS', 'STATUS', 'RETURN_CODE', 'RETURN_MESSAGE', 'DATE',
+            'AMOUNT', 'CURRENCY', 'INSTALLMENTS_NO', 'CARD_PROGRAM_NAME',
+            'ORDER_REF', 'AUTH_CODE', 'RRN', 'WIRE_ACCOUNTS', 'TOKEN_HASH',
+            'TX_REFNO', 'URL_REDIRECT'
+          ]
+        }
+
+      TOKEN_HASH:
+        type: string
+        description: |
+          Displayed only if token payments are enabled for this order.
+
+          See **Enable Token Payments**
+
+          Represents the hash string for the generated token.
+          It can be used by specifying this hash string in the CC_TOKEN field
+          for OneClick payments.
+      TX_REFNO:
+        type: string
+        description: |
+          *[Offline payment methods only]* The acquirer reference number for
+          the generated transaction. If any error occurs during transaction or the
+          transfer is rejected, this response element will be empty or missing.
+      URL_REDIRECT:
+        type: string
+        description: |
+          [PBL payment methods only] The url to which the merchant
+          must redirect the user in order to complete the transaction.
+    xml:
+      name: EPAYMENT
+  WireAccountRaw:
+    type: object
+    x-extraAnnotation: "@javax.xml.bind.annotation.XmlAccessorType(javax.xml.bind.annotation.XmlAccessType.FIELD)"
+    properties:
+      BANK_IDENTIFIER:
+        type: string
+        description: Bank identifier
+      BANK_ACCOUNT:
+        type: string
+        description: Bank account
+      ROUTING_NUMBER:
+        type: string
+        description: Bank routing number
+      IBAN_ACCOUNT:
+        type: string
+        description: IBAN account
+      BANK_SWIFT:
+        type: string
+        description: Bank swift
+      COUNTRY:
+        type: string
+        description: Country
+      WIRE_RECIPIENT_NAME:
+        type: string
+        description: Wire payment Recipient name
+      WIRE_RECIPIENT_VAT_ID:
+        type: string
+        description: Wire payment recipient VAT id
+
+  # belonging to raw API, but the optimized, simplified one
+  # written on top of this.
+  Merchant:
+    type: object
+    properties:
+      key:
+        type: string
+        description: merchant key
+      secretKey:
+        type: string
+        description: merchant shared secret key, part of signing with 'x-payu-parameter-hash'
+  WireAccount:
+    type: object
+    properties:
+      bankIdentifier:
+        type: string
+        description: Bank identifier
+      bankAccount:
+        type: string
+        description: Bank account
+      bankRoutingNumber:
+        type: string
+        description: Bank routing number
+      iban:
+        type: string
+        description: IBAN account
+      swift:
+        type: string
+        description: Bank swift
+      country:
+        type: string
+        description: Country
+      recipientName:
+        type: string
+        description: Wire payment Recipient name
+      recipientVatId:
+        type: string
+        description: Wire payment recipient VAT id
+  InstallmentsPaymentOption:
+    type: object
+    description: Pay with installments
+    properties:
+      numberOfInstallments:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 12
+        description: |
+          The number of installments. It can be an integer between 1 and 12
+      cardProgramName:
+        type: string
+        description: |
+          The name of card program that allows paying an order using installments
+      campaignType:
+        type: string
+        enum:
+          - EXTRA_INSTALLMENTS
+          - DELAY_INSTALLMENTS
+        description: |
+          A predefined string value indicating the type of campaign to be used. It can only have
+          one of the following values:
+          * EXTRA_INSTALLMENTS
+          * DELAY_INSTALLMENTS
+
+          For bank terminals supporting both campaign types used at the same time, you can set
+          both comma separated values, e.g: EXTRA_INSTALLMENTS,DELAY_INSTALLMENTS.
+
+          Must be used only with installments transactions (SELECTED_INSTALLMENTS_NUMBER >= 2).
+  LoyaltyPointsPaymentOption:
+    type: object
+    description: Pay with loyalty points
+    properties:
+      amount:
+        type: number
+        format: double
+        description: |
+          A positive number indicating the money amount worth of
+          loyalty points to be used for payment
+  CardPaymentOption:
+    type: object
+    description: Pay with credit card
+    properties:
+      ccNumber:
+        type: string
+        description: |
+          The card number on which the order authorization will be made
+      ccOwner:
+        type: string
+        description: |
+          The card owner name, as it appears on the card.
+      expMonth:
+        type: integer
+        description: |
+          The month in which the card used expires
+      expYear:
+        type: integer
+        description: |
+          The year in which the card used expires
+      cvv:
+        type: string
+        description: |
+          The CCV/CVV2 code for the card. For some card types or
+          based on merchant settings this can be empty,
+          otherwise it should have a numerical value
+      enableToken:
+        type: boolean
+        description: |
+          Enable Token payments for the order. For the initial transaction,
+          we have this parameter set to 1
+      ccNumberTime:
+        type: string
+        description: |
+          Time spent by user to insert card number
+      ccOwnerTime:
+        type: string
+        description: |
+          Time spent by user to insert card owner
+  TokenizedCardPaymentOption:
+    type: object
+    description: Pay with tokenized version of credit card
+    properties:
+      ccToken:
+        type: string
+        description: |
+          Token of the card
+  Address:
+    type: object
+    description: Describes a generic address object
+    properties:
+      addressLine1:
+        type: string
+        description: Address line 1
+        x-example: ....
+      addressLine:
+        type: string
+        description: Address line 2
+        x-eample: ...
+      zipCode:
+        type: string
+        description: Zip code
+      city:
+        type: string
+        description: City
+      state:
+        type: string
+        description: State / Dept
+      countryCode:
+        type: string
+        description: Country code in 2 letters ISO format
+  ContactPerson:
+    type: object
+    properties:
+      firstName:
+        type: string
+        description: Person first name
+      lastName:
+        type: string
+        description: Person last name
+      email:
+        type: string
+        description: Person email address
+      phone:
+        type: string
+        description: Person phone number
+  DocumentId:
+    type: object
+    properties:
+      documentType:
+        type: string
+        enum:
+          - PERSONALID
+          - PASSPORT
+          - DRVLICENSE
+        description: |
+          Shopper's ID type - mandatory for UPT.
+          Accepted values:
+          * PERSONALID (identity card)
+          * PASSPORT (passport)
+          * DRVLICENSE (driving license)
+      documentNumber:
+        type: string
+        description: |
+          Shopper's ID number (for the specified ID type)
+  Billing:
+    type: object
+    description: Billing setup for ALU request
+    properties:
+      contactPerson:
+        $ref: '#/definitions/ContactPerson'
+      fax:
+        type: string
+        description: Shopper fax number
+      address:
+        $ref: '#/definitions/Address'
+      documentId:
+        $ref: '#/definitions/DocumentId'
+  Delivery:
+    type: object
+    description: Delivery setup for ALU request
+    properties:
+      contactPerson:
+        $ref: '#/definitions/ContactPerson'
+      company:
+        type: string
+        description: Company name where the order will be delivered
+      address:
+        $ref: '#/definitions/Address'  # Part of refactoring, these entities are not actually
+  OrderItem:
+    type: object
+    description: An item belonging to ALU request
+    properties:
+      name:
+        type: string
+        minimum: 2
+        maximum: 155
+        description: Order item name
+        x-example: Flat screen TV
+      code:
+        type: string
+        maximum: 50
+        description: |
+          Product code. If multiple products are sent (in the same or subsequent transactions)
+          with the same product code, PayU will update the product with
+          the corresponding index (overwriting all the other product information - name, price, taxes).
+      info:
+        type: string
+        description: |
+          Holds additional information about this order item
+      version:
+        type: string
+        description: |
+          First item in the so-called array of product version for all ordered products
+      price:
+        type: number
+        description: |
+          Unit price for product. Default currency is set by PRICES_CURRENCY
+      vat:
+        type: number
+        minimum: 0
+        maximum: 1
+        description: VAT value for product
+      priceType:
+        type: string
+        enum:
+          - GROSS
+          - NET
+        default: 'NET'
+        description: |
+          Specify if ORDER_PRICE[0] parameter includes VAT or not.
+          * GROSS (VAT is included)
+          * NET (VAT will be added by PayU)
+      quantity:
+        type: integer
+        description: Number of items
+  Shipping:
+    type: object
+    description: |
+      2.0 model version for ALU entities. This one in particular represents the shipping information
+    properties:
+      cost:
+        type: number
+        description: |
+            A positive number indicating the price of shipping.
+            The currency is set by PRICES_CURRENCY.
+  AluPaymentOption:
+    type: object
+    description: References all payment options available through ALU protocol
+    properties:
+      creditCard:
+        $ref: '#/definitions/CardPaymentOption'
+      token:
+        $ref: '#/definitions/TokenizedCardPaymentOption'
+      installments:
+        $ref: '#/definitions/InstallmentsPaymentOption'
+      loyaltyPoints:
+        $ref: '#/definitions/LoyaltyPointsPaymentOption'
+  AluRequest:
+    type: object
+    description: 2.0 model version for ALU entities
+    properties:
+      merchant:
+        $ref: '#/definitions/Merchant'
+      orderRef:
+        type: string
+        description: |
+            Order external reference number in Merchant's system
+      orderDate:
+        type: string
+        format: date-time
+        description: |
+            The date when the order is initiated in the system,
+            in YYYY-MM-DD HH:MM:SS format (e.g.: "2012-05-01 21:15:45")
+            Important: Date should be UTC standard +/-10 minutes
+      orderTimeout:
+        type: integer
+        format: int32
+        description: |
+          The time in seconds after which the order will expire.
+      clientIp:
+        type: string
+        description: ip address of the shopper
+        default: '127.0.0.1'
+      clientTime:
+        type: string
+        format: date-time
+        description: |
+          Time collected from the Shopper's browser in YYYY-MM-DD hh:mm;ss format
+      posCode:
+        type: string
+        description: |
+            Optional field used to define orders made through a specific POS.
+            Sent value should be previously confirmed with operation team.
+      payMethod:
+        type: string
+        default: 'CCVISAMC'
+        enum:
+          - CCVISAMC
+          - WIRE
+          - UPT
+          - BKM
+          - QIWI
+          - PAYU_CREDIT
+          - QBANK
+          - COMPAY
+          - TINKOFF_LOAN
+        description: |
+            Payment method for the order. Possible values: CCVISAMC -
+            Visa/Mastercard credit card (default), WIRE, UPT, BKM, QIWI,
+            PAYU_CREDIT, QBANK, COMPAY, TINKOFF_LOAN
+      currency:
+        type: string
+        description: |
+          The currency in which the prices are expressed, for example TRY.
+          If the parameter is not specified, the default value is
+          the default currency of the Merchant.
+      continueUri:
+        type: string
+        description: |
+            Return URL on the Merchant webshop side that will be used in case
+            of 3DS enrolled cards authorizations or for Pay By Link (PBL)
+            payment methods (such as BKM, QIWI, PayU Credit, QBank, Compay, Tinkoff Loan).
+      billing:
+        $ref: '#/definitions/Billing'
+      delivery:
+        $ref: '#/definitions/Delivery'
+      orderItems:
+        type: array
+        items:
+          $ref: '#/definitions/OrderItem'
+      paymentOptions:
+        $ref: '#/definitions/AluPaymentOption'
+      shipping:
+        $ref: '#/definitions/Shipping'
+  AluResponse:
+    type: object
+    description: 2.0 model version for ALU entities
+    properties:
+      refNum:
+        type: string
+        description: |
+          Global PayU reference number for the order.
+          This is unique across all requests. If any of the required parameters
+          is missing, this will be empty!
+      status:
+        type: string
+        enum:
+          - SUCCESS
+          - FAILED
+          - INPUT_ERROR
+        description: |
+          Possible values
+          * SUCCESS - If the payment was authorized. In this case also REFNO is returned (see response sample)
+          * FAILED - If the payment could NOT be authorized for various reasons (fraud, insufficient funds etc.). In this case a REFNO is returned, but the payment is Pending (see response sample)
+          * INPUT_ERROR - If the payment request has erroneous or missing required parameters (see response sample)
+      returnCode:
+        type: string
+        enum:
+          - AUTHORIZED
+          - 3DS_ENROLLED
+          - ALREADY_AUTHORIZED
+          - AUTHORIZATION_FAILED
+          - INVALID_CUSTOMER_INFO
+          - INVALID_PAYMENT_INFO
+          - INVALID_ACCOUNT
+          - INVALID_PAYMENT_METHOD_CODE
+          - INVALID_CURRENCY
+          - REQUEST_EXPIRED
+          - HASH_MISMATCH
+          - WRONG_VERSION
+          - INVALID_CC_TOKEN
+          - INSTALLMENTS_LOYALTY_POINTS_INCOMPATIBLE
+        # TODO add some details for enum above!
+      continueUri3Ds:
+        type: string
+        description: |
+          In case that the credit card is enrolled in 3D Secure system,
+          this parameter will contain an URL where the Merchant
+          should redirect the browser of the Shopper (see response sample).
+      amount:
+        type: string
+        description: Total transacted amount
+      currency:
+        type: string
+        description: The currency in which the order has been processed
+      installmentsNum:
+        type: string
+        description: The number of installments
+      cardProgramName:
+        type: string
+        description: The name of card program used for paying the order
+      orderRef:
+        type: string
+        description: Order external reference number in Merchant's system
+      wireAccounts:
+        type: array
+        items:
+          $ref: '#/definitions/WireAccount'
+        description: |
+          Contains an array of bank accounts used for paying in WIRE method.
+          In case of other payment methods the node will be missing.
+      tokenHash:
+        type: string
+        description: |
+          Displayed only if token payments are enabled for this order.
+
+          See **Enable Token Payments**
+
+          Represents the hash string for the generated token.
+          It can be used by specifying this hash string in the CC_TOKEN field
+          for OneClick payments.
+      txnRefNo:
+        type: string
+        description: |
+          *[Offline payment methods only]* The acquirer reference number for
+          the generated transaction. If any error occurs during transaction or the
+          transfer is rejected, this response element will be empty or missing.
+      completeTxnRedirectUri:
+        type: string
+        description: |
+          [PBL payment methods only] The url to which the merchant
+          must redirect the user in order to complete the transaction.
+
+  Error:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      message:
+        type: string
+      fields:
+        type: string

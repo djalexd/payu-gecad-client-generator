@@ -1,0 +1,71 @@
+{{> licenceInfo}}
+
+package {{invokerPackage}};
+
+import java.time.OffsetDateTime;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Registry for all type converters and performs conversion of types.
+ */
+class TypeConverterRegistry {
+
+	private class FromTo {
+		private Class from, to;
+		FromTo(Class from, Class to) {
+			this.from = from;
+			this.to = to;
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (o == null || getClass() != o.getClass()) return false;
+
+			FromTo fromTo = (FromTo) o;
+
+			return from.equals(fromTo.from) && to.equals(fromTo.to);
+		}
+
+		@Override
+		public int hashCode() {
+			int result = from.hashCode();
+			result = 31 * result + to.hashCode();
+			return result;
+		}
+	}
+
+	private Map<FromTo, TypeConverter> converters = new HashMap<>();
+
+	TypeConverterRegistry() {
+		registerDefaultTypeConverters();
+	}
+
+	private void registerDefaultTypeConverters() {
+		registerTypeConverter(String.class, String.class, s -> s);
+		registerTypeConverter(Number.class, String.class, Object::toString);
+		registerTypeConverter(Object.class, String.class, Object::toString);
+	}
+
+	void clearTypeConverters() {
+		converters.clear();
+	}
+
+	<A> TypeConverterRegistry registerTypeConverter(Class<A> from, Class to, TypeConverter<A, ?> converter) {
+		converters.put(this.new FromTo(from, to), converter);
+		return this;
+	}
+
+	@SuppressWarnings("unchecked")
+	<T> T convert(Object from, Class<T> to) {
+		return (T) converters
+				.entrySet()
+				.stream()
+				.filter(ft -> ft.getKey().from.isAssignableFrom(from.getClass()) && ft.getKey().to.equals(to))
+				.findAny()
+				.map(Map.Entry::getValue)
+				.map(c -> c.apply(from))
+				.orElseThrow(() -> new RuntimeException(String.format("Unable to find a converter from=%s to=%s", from.getClass(), to)));
+	}
+}

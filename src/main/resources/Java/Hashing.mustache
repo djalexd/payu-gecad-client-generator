@@ -1,0 +1,129 @@
+{{> licenceInfo}}
+
+package {{invokerPackage}};
+
+import {{modelPackage}}.Merchant;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+
+public final class Hashing {
+	public Hashing() {}
+
+	private static ThreadLocal<Merchant> merchantHolder = new ThreadLocal<>();
+
+	public static void configureMerchant(Merchant merchant) {
+		merchantHolder.set(merchant);
+	}
+	
+	/**
+	 * Utility class used to calculate the HASH.
+	 */
+	public static class HashConfiguration {
+		String algorithm;
+		boolean includeEmptyParameters;
+		boolean includeParamsLength;
+		String parameterOrder;
+		List<String> parameters;
+		List<String> skipParameters;
+
+		public HashConfiguration(String algorithm, boolean includeEmptyParameters, boolean includeParamsLength, String parameterOrder, List<String> parameters, List<String> skipParameters) {
+			this.algorithm = algorithm;
+			this.includeEmptyParameters = includeEmptyParameters;
+			this.includeParamsLength = includeParamsLength;
+			this.parameterOrder = parameterOrder;
+			this.parameters = parameters;
+			this.skipParameters = skipParameters;
+		}
+	}
+
+	/**
+	 * Calculates the hash based on source object and configuration.
+	 */
+	public String calculateHash(final Map<String, Object> source, final ApiClient client, final HashConfiguration cfg) {
+
+		if (merchantHolder.get() == null) {
+			throw new IllegalStateException("There is no configured merchantHolder, call Hashing#configureMerchant(...) method");
+		}
+
+		final String strToSign = source
+				.entrySet()
+				.stream()
+				.sorted((o1, o2) -> {
+					if ("alphabetically".equalsIgnoreCase(cfg.parameterOrder)) {
+						return o1.getKey().compareTo(o2.getKey());
+					} else if ("fixed".equalsIgnoreCase(cfg.parameterOrder)) {
+						// Order is imposed by 'parameters' list. What is not
+						// defined there goes to the end of the list, unordered.
+						int index1 = cfg.parameters.indexOf(o1.getKey()), index2 = cfg.parameterOrder.indexOf(o2.getKey());
+						if (index1 > -1) {
+							if (index2 > -1) {
+								// compare the 2 indices.
+								return Integer.valueOf(index1).compareTo(index2);
+							} else {
+								// f1 is indeed before f2
+								return -1;
+							}
+						} else {
+							if (index2 > -1) {
+								// f2 is before f1
+								return 1;
+							} else {
+								// both are missing, add at end
+								return 0;
+							}
+						}
+					} else {
+						throw new IllegalArgumentException(String.format("Invalid 'parameterOrder' value: %s", cfg.parameterOrder));
+					}
+				})
+				.filter(e -> e.getValue() != null)
+				.filter( e -> !cfg.skipParameters.contains(e.getKey()))
+				.map(Map.Entry::getValue)
+				.map(client::parameterToString)
+				.map(s -> cfg.includeParamsLength ? s.length() + s : s)
+				.flatMap(s -> {
+					if (s.isEmpty() && !cfg.includeEmptyParameters) {
+						return Stream.of();
+					} else {
+						return Stream.of(s);
+					}
+				}).collect(Collectors.joining());
+
+		try {
+			final SecretKeySpec signingKey = new SecretKeySpec(merchantHolder.get().getSecretKey().getBytes(StandardCharsets.UTF_8), cfg.algorithm);
+			final Mac mac = Mac.getInstance(cfg.algorithm);
+			mac.init(signingKey);
+			// compute the hmac on input data bytes
+			byte[] rawHmac = mac.doFinal(strToSign.getBytes());
+			// convert to hex string
+			return bytesToHex(rawHmac);
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	private static String bytesToHex(byte[] bytes) {
+		final char[] hexArray = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
+		char[] hexChars = new char[bytes.length * 2];
+		int v;
+		for (int j = 0; j < bytes.length; j++) {
+			v = bytes[j] & 0xFF;
+			hexChars[j * 2] = hexArray[v >>> 4];
+			hexChars[j * 2 + 1] = hexArray[v & 0x0F];
+		}
+		return new String(hexChars);
+	}
+}

@@ -1,0 +1,36 @@
+{{> licenceInfo}}
+
+package {{invokerPackage}};
+
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.Temporal;
+
+/** Utility class that centralizes conversion between types. */
+final class Convertors {
+
+	private TypeConverterRegistry converterRegistry = new TypeConverterRegistry();
+
+	private DateTimeFormatter format = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
+	{
+		updateConverters();
+	}
+
+	void setDateTimeFormat(DateTimeFormatter format) {
+		this.format = format;
+		updateConverters();
+	}
+
+	String convertToString(Object source) {
+		return converterRegistry.convert(source, String.class);
+	}
+
+  <T> T convertTo(Object source, Class<T> to) {
+	  return converterRegistry.convert(source, to);
+	}
+
+	/* Updates the converters that would require a date formatting. */
+	private void updateConverters() {
+		converterRegistry.registerTypeConverter(Temporal.class, String.class, date -> format.format(date));
+		//converterRegistry.registerTypeConverter(String.class, String.class, date -> format.format(date));
+	}
+}

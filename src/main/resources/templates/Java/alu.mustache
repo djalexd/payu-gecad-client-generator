@@ -1,0 +1,267 @@
+{{> licenceInfo}}
+
+package {{apiPackage}};
+
+import com.squareup.okhttp.Call;
+import {{invokerPackage}}.ApiCallback;
+import {{invokerPackage}}.ApiClient;
+import {{invokerPackage}}.ApiException;
+import {{modelPackage}}.Address;
+import {{modelPackage}}.AluPaymentOption;
+import {{modelPackage}}.AluRequest;
+import {{modelPackage}}.AluResponse;
+import {{modelPackage}}.AluResponseRaw;
+import {{modelPackage}}.Billing;
+import {{modelPackage}}.CardPaymentOption;
+import {{modelPackage}}.ContactPerson;
+import {{modelPackage}}.Delivery;
+import {{modelPackage}}.Merchant;
+import {{modelPackage}}.OrderItem;
+
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.math.BigDecimal;
+import java.text.SimpleDateFormat;
+import java.time.OffsetDateTime;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
+import {{invokerPackage}}.Hashing;
+
+public class Alu {
+
+	private static final ApiClient client = new ApiClient();
+	static {
+		client.setVerifyingSsl(false);
+		client.setDebugging(true);
+		client.setDateTimeFormat(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.of("UTC")));
+		client.setBasePath("https://sandbox11ru.epayment.ro");
+	}
+
+	public static void main(String[] args) throws ApiException {
+		final Merchant superman = new Merchant().key("Superman").secretKey("krypton");
+		Hashing.configureMerchant(superman);
+
+		final Alu api = new Alu(client);
+
+		final ContactPerson customer = new ContactPerson()
+				.firstName("General")
+				.lastName("Zod")
+				.email("zod@krypton.org")
+				.phone("+1234567890");
+		final Address customerAddress = new Address()
+				.addressLine("Star X")
+				.countryCode("US")
+				.zipCode("00000")
+				.state("NY")
+				.city("New York");
+
+		final AluRequest request = new AluRequest()
+				.merchant(superman)
+				.orderRef(UUID.randomUUID().toString())
+				.payMethod(AluRequest.PayMethodEnum.CCVISAMC)
+				.currency("KRY")
+				.orderItems(Collections.singletonList(
+						new OrderItem()
+								.name("Standard general purpose computer")
+								.code("PC")
+								.price(BigDecimal.valueOf(1251.14))
+								.quantity(1)
+				))
+				.billing(new Billing()
+						.contactPerson(customer)
+						.address(customerAddress))
+				.paymentOptions(new AluPaymentOption()
+					.creditCard(new CardPaymentOption()
+						.ccNumber("4111111111111111")
+						.cvv("012")
+						.expMonth(12)
+						.expYear(2020)
+					))
+				.delivery(new Delivery()
+					.contactPerson(customer)
+					.address(customerAddress));
+
+		final AluResponse response = api.createOrder(request);
+		System.out.println(response);
+	}
+
+	private final DefaultApi api;
+
+	public Alu(ApiClient apiClient) {
+		this.api = new DefaultApi(apiClient);
+	}
+
+	public CompletableFuture<AluResponse> createOrderAsync(final AluRequest request) throws ApiException {
+
+		final CompletableFuture<AluResponse> future = new CompletableFuture<>();
+
+		api.createOrderAsync(
+				resolve(() -> request.getMerchant().getKey()).orElseThrow(ApiException::new),
+				resolve(request::getOrderRef).orElseThrow(ApiException::new),
+				resolve(request::getOrderDate).orElse(OffsetDateTime.now()),
+				request.getPayMethod().toString(),
+				request.getContinueUri(),
+				null,
+				resolve(() -> request.getBilling().getContactPerson().getLastName()).orElse(null),
+				resolve(() -> request.getBilling().getContactPerson().getFirstName()).orElse(null),
+				resolve(() -> request.getBilling().getContactPerson().getEmail()).orElse(null),
+				resolve(() -> request.getBilling().getContactPerson().getPhone()).orElse(null),
+				resolve(() -> request.getBilling().getAddress().getCountryCode()).orElse(null),
+				resolve(() -> request.getBilling().getDocumentId().getDocumentType().toString()).orElse(null),
+				resolve(() -> request.getBilling().getDocumentId().getDocumentNumber()).orElse(null),
+				resolve(() -> request.getPaymentOptions().getCreditCard().getCcNumber()).orElse(null),
+				resolve(() -> Integer.toString(request.getPaymentOptions().getCreditCard().getExpMonth())).orElse(null),
+				resolve(() -> Integer.toString(request.getPaymentOptions().getCreditCard().getExpYear())).orElse(null),
+				resolve(() -> request.getPaymentOptions().getCreditCard().getCvv()).orElse(null),
+				resolve(() -> request.getPaymentOptions().getCreditCard().getCcOwner()).orElse(null),
+				resolve(() -> request.getPaymentOptions().getToken().getCcToken()).orElse(null),
+				resolve(() -> request.getPaymentOptions().getInstallments().getNumberOfInstallments()).orElse(null),
+				resolve(() -> request.getPaymentOptions().getInstallments().getCardProgramName()).orElse(null),
+				resolve(request::getOrderTimeout).orElse(null),
+				resolve(() -> request.getPaymentOptions().getLoyaltyPoints()).map(p -> "YES").orElse(null),
+				resolve(() -> BigDecimal.valueOf(request.getPaymentOptions().getLoyaltyPoints().getAmount())).orElse(null),
+				resolve(() -> request.getPaymentOptions().getInstallments().getCampaignType().toString()).orElse(null),
+				resolve(() -> request.getShipping().getCost()).orElse(null),
+				resolve(request::getPosCode).orElse(null),
+				resolve(() -> request.getBilling().getFax()).orElse(null),
+				resolve(() -> request.getBilling().getAddress().getAddressLine()).orElse(null),
+				resolve(() -> request.getBilling().getAddress().getAddressLine1()).orElse(null),
+				resolve(() -> request.getBilling().getAddress().getZipCode()).orElse(null),
+				resolve(() -> request.getBilling().getAddress().getCity()).orElse(null),
+				resolve(() -> request.getBilling().getAddress().getState()).orElse(null),
+				resolve(() -> request.getDelivery().getContactPerson().getLastName()).orElse(null),
+				resolve(() -> request.getDelivery().getContactPerson().getFirstName()).orElse(null),
+				resolve(() -> request.getDelivery().getContactPerson().getEmail()).orElse(null),
+				resolve(() -> request.getDelivery().getContactPerson().getPhone()).orElse(null),
+				resolve(() -> request.getDelivery().getCompany()).orElse(null),
+				resolve(() -> request.getDelivery().getAddress().getAddressLine()).orElse(null),
+				resolve(() -> request.getDelivery().getAddress().getAddressLine1()).orElse(null),
+				resolve(() -> request.getDelivery().getAddress().getZipCode()).orElse(null),
+				resolve(() -> request.getDelivery().getAddress().getCity()).orElse(null),
+				resolve(() -> request.getDelivery().getAddress().getState()).orElse(null),
+				resolve(() -> request.getDelivery().getAddress().getCountryCode()).orElse(null),
+				resolve(() -> request.getPaymentOptions().getCreditCard().getEnableToken()).map(b -> b ? "1" : null).orElse(null),
+				resolve(() -> request.getPaymentOptions().getCreditCard().getEnableToken()).map(b -> b ? "PAY_BY_CLICK" : null).orElse(null),
+				resolve(() -> request.getPaymentOptions().getCreditCard().getCcNumberTime()).orElse(null),
+				resolve(() -> request.getPaymentOptions().getCreditCard().getCcOwnerTime()).orElse(null),
+				resolve(request::getClientIp).orElse(null),
+				resolve(request::getClientTime).orElse(OffsetDateTime.now()),
+				resolve(request::getCurrency).orElseThrow(ApiException::new),
+				resolve(() -> request.getOrderItems().get(0).getName()).orElse(null),
+				resolve(() -> request.getOrderItems().get(0).getCode()).orElse(null),
+				resolve(() -> request.getOrderItems().get(0).getPrice()).orElse(null),
+				resolve(() -> request.getOrderItems().get(0).getVat()).orElse(null),
+				resolve(() -> request.getOrderItems().get(0).getPriceType().toString()).orElse(null),
+				resolve(() -> request.getOrderItems().get(0).getQuantity()).orElse(null),
+				resolve(() -> request.getOrderItems().get(0).getInfo()).orElse(null),
+				resolve(() -> request.getOrderItems().get(0).getVersion()).orElse(null),
+				resolve(() -> request.getOrderItems().get(1).getName()).orElse(null),
+				resolve(() -> request.getOrderItems().get(1).getCode()).orElse(null),
+				resolve(() -> request.getOrderItems().get(1).getPrice()).orElse(null),
+				resolve(() -> request.getOrderItems().get(1).getVat()).orElse(null),
+				resolve(() -> request.getOrderItems().get(1).getPriceType().toString()).orElse(null),
+				resolve(() -> request.getOrderItems().get(1).getQuantity()).orElse(null),
+				resolve(() -> request.getOrderItems().get(1).getInfo()).orElse(null),
+				resolve(() -> request.getOrderItems().get(1).getVersion()).orElse(null),
+				resolve(() -> request.getOrderItems().get(2).getName()).orElse(null),
+				resolve(() -> request.getOrderItems().get(2).getCode()).orElse(null),
+				resolve(() -> request.getOrderItems().get(2).getPrice()).orElse(null),
+				resolve(() -> request.getOrderItems().get(2).getVat()).orElse(null),
+				resolve(() -> request.getOrderItems().get(2).getPriceType().toString()).orElse(null),
+				resolve(() -> request.getOrderItems().get(2).getQuantity()).orElse(null),
+				resolve(() -> request.getOrderItems().get(2).getInfo()).orElse(null),
+				resolve(() -> request.getOrderItems().get(2).getVersion()).orElse(null),
+				resolve(() -> request.getOrderItems().get(3).getName()).orElse(null),
+				resolve(() -> request.getOrderItems().get(3).getCode()).orElse(null),
+				resolve(() -> request.getOrderItems().get(3).getPrice()).orElse(null),
+				resolve(() -> request.getOrderItems().get(3).getVat()).orElse(null),
+				resolve(() -> request.getOrderItems().get(3).getPriceType().toString()).orElse(null),
+				resolve(() -> request.getOrderItems().get(3).getQuantity()).orElse(null),
+				resolve(() -> request.getOrderItems().get(3).getInfo()).orElse(null),
+				resolve(() -> request.getOrderItems().get(3).getVersion()).orElse(null),
+
+				resolve(() -> request.getOrderItems().get(4).getName()).orElse(null),
+				resolve(() -> request.getOrderItems().get(4).getCode()).orElse(null),
+				resolve(() -> request.getOrderItems().get(4).getPrice()).orElse(null),
+				resolve(() -> request.getOrderItems().get(4).getVat()).orElse(null),
+				resolve(() -> request.getOrderItems().get(4).getPriceType().toString()).orElse(null),
+				resolve(() -> request.getOrderItems().get(4).getQuantity()).orElse(null),
+				resolve(() -> request.getOrderItems().get(4).getInfo()).orElse(null),
+				resolve(() -> request.getOrderItems().get(4).getVersion()).orElse(null),
+
+				resolve(() -> request.getOrderItems().get(5).getName()).orElse(null),
+				resolve(() -> request.getOrderItems().get(5).getCode()).orElse(null),
+				resolve(() -> request.getOrderItems().get(5).getPrice()).orElse(null),
+				resolve(() -> request.getOrderItems().get(5).getVat()).orElse(null),
+				resolve(() -> request.getOrderItems().get(5).getPriceType().toString()).orElse(null),
+				resolve(() -> request.getOrderItems().get(5).getQuantity()).orElse(null),
+				resolve(() -> request.getOrderItems().get(5).getInfo()).orElse(null),
+				resolve(() -> request.getOrderItems().get(5).getVersion()).orElse(null),
+				new ApiCallback<AluResponseRaw>() {
+					@Override
+					public void onFailure(ApiException e, int statusCode, Map<String, List<String>> responseHeaders) {
+						future.completeExceptionally(e);
+					}
+
+					@Override
+					public void onSuccess(AluResponseRaw raw, int statusCode, Map<String, List<String>> responseHeaders) {
+						final AluResponse response = new AluResponse()
+								.refNum(raw.getREFNO())
+								.status(resolve(()->AluResponse.StatusEnum.valueOf(raw.getSTATUS().toString())).orElse(null))
+								.returnCode(resolve(()->AluResponse.ReturnCodeEnum.byValue(raw.getRETURNCODE())).orElse(null))
+								.amount(raw.getAMOUNT())
+								.currency(raw.getCURRENCY())
+								.installmentsNum(raw.getINSTALLMENTSNO())
+								.cardProgramName(raw.getCARDPROGRAMNAME())
+								.completeTxnRedirectUri(raw.getURLREDIRECT())
+								.cardProgramName(raw.getCARDPROGRAMNAME())
+								.orderRef(raw.getORDERREF())
+								.txnRefNo(raw.getTXREFNO())
+								.tokenHash(raw.getTOKENHASH())
+								.completeTxnRedirectUri(raw.getURLREDIRECT())
+								.continueUri3Ds(raw.getURL3DS());
+						future.complete(response);
+					}
+
+					@Override
+					public void onUploadProgress(long bytesWritten, long contentLength, boolean done) {
+						// No-op
+					}
+
+					@Override
+					public void onDownloadProgress(long bytesRead, long contentLength, boolean done) {
+						// No-op
+					}
+				});
+
+		return future;
+	}
+
+	public AluResponse createOrder(final AluRequest request) throws ApiException {
+		try {
+			return createOrderAsync(request).get();
+		} catch (InterruptedException e) {
+			throw new RuntimeException(e);
+		} catch (ExecutionException e) {
+			if (e.getCause() instanceof ApiException) {
+				throw (ApiException) e.getCause();
+			} else {
+				throw new RuntimeException("Unexpected cause for execution exception", e);
+			}
+		}
+	}
+
+	private static <T> Optional<T> resolve(Supplier<T> supp) {
+		try {
+			return Optional.ofNullable(supp.get());
+		} catch (NullPointerException | IndexOutOfBoundsException e) {
+			return Optional.empty();
+		}
+	}
+}

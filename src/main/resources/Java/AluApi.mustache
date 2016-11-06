@@ -1,0 +1,313 @@
+{{> licenceInfo }}
+
+package {{ apiPackage }};
+
+import com.fasterxml.jackson.dataformat.xml.XmlMapper;
+import {{ invokerPackage }}.ApiException;
+import {{ invokerPackage }}.ApiResponse;
+import {{ invokerPackage }}.Hashing;
+
+import java.io.IOException;
+
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+
+import {{ modelPackage }}.AluRequest;
+import {{ modelPackage }}.AluResponse;
+import {{ modelPackage }}.AluResponseRaw;
+import org.apache.http.HttpHeaders;
+import org.apache.http.HttpResponse;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpUriRequest;
+import org.apache.http.message.BasicHeader;
+import org.apache.http.message.BasicNameValuePair;
+
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Spliterator;
+import java.util.Spliterators;
+import java.util.function.BiFunction;
+import java.util.function.BinaryOperator;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
+
+import static java.util.Optional.ofNullable;
+
+{{> aluDocs }}
+public class AluApi {
+	private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.of("UTC"));
+
+	private HttpClient apiClient;
+
+	private URI targetURI;
+
+	private XmlMapper mapper;
+
+	public AluApi(HttpClient apiClient, URI targetURI, XmlMapper mapper) {
+		this.apiClient = apiClient;
+		this.targetURI = targetURI;
+		this.mapper = mapper;
+	}
+
+	private static <T> Optional<T> resolve(Supplier<T> supp) {
+		try {
+			return ofNullable(supp.get());
+		} catch (NullPointerException | IndexOutOfBoundsException e) {
+			return Optional.empty();
+		}
+	}
+	
+	private static SupplierForParameter of(String parameter, Supplier<String> supplier) {
+		return new SupplierForParameter(supplier, parameter);
+	}
+
+	private static <T> SupplierForParameter of(String parameter, Supplier<T> supplier, Function<T, String> fn) {
+		return new SupplierForParameter(() -> ofNullable(supplier.get()).map(fn).orElse(null), parameter);
+	}
+
+	static private class SupplierForParameter {
+		private final Supplier<String> supp;
+		private final String parameter;
+
+		private SupplierForParameter(Supplier<String> supp, String parameter) {
+			this.supp = supp;
+			this.parameter = parameter;
+		}
+	}
+
+	static private class OptionalForParameter {
+		private final String value;
+		private final String parameter;
+
+		private OptionalForParameter(String value, String parameter) {
+			this.value = value;
+			this.parameter = parameter;
+		}
+
+		static <T> Optional<OptionalForParameter> from(SupplierForParameter supplier) {
+			return resolve(supplier.supp).map(t -> new OptionalForParameter(t, supplier.parameter));
+		}
+	}
+
+	private static<A, B, C> Stream<C> zip(Stream<? extends A> a,
+										 Stream<? extends B> b,
+										 BiFunction<? super A, ? super B, ? extends C> zipper) {
+		Objects.requireNonNull(zipper);
+		Spliterator<? extends A> aSpliterator = Objects.requireNonNull(a).spliterator();
+		Spliterator<? extends B> bSpliterator = Objects.requireNonNull(b).spliterator();
+
+		// Zipping looses DISTINCT and SORTED characteristics
+		int characteristics = aSpliterator.characteristics() & bSpliterator.characteristics() &
+			~(Spliterator.DISTINCT | Spliterator.SORTED);
+
+		long zipSize = ((characteristics & Spliterator.SIZED) != 0)
+			? Math.min(aSpliterator.getExactSizeIfKnown(), bSpliterator.getExactSizeIfKnown())
+			: -1;
+
+		Iterator<A> aIterator = Spliterators.iterator(aSpliterator);
+		Iterator<B> bIterator = Spliterators.iterator(bSpliterator);
+		Iterator<C> cIterator = new Iterator<C>() {
+			@Override
+			public boolean hasNext() {
+				return aIterator.hasNext() && bIterator.hasNext();
+			}
+
+			@Override
+			public C next() {
+				return zipper.apply(aIterator.next(), bIterator.next());
+			}
+		};
+
+		Spliterator<C> split = Spliterators.spliterator(cIterator, zipSize, characteristics);
+		return (a.isParallel() || b.isParallel())
+			? StreamSupport.stream(split, true)
+			: StreamSupport.stream(split, false);
+	}
+
+	private static class Indexed<T> {
+		T t;
+		int index;
+		Indexed(T t, int index) {
+			this.t = t;
+			this.index = index;
+		}
+	}
+
+	private static <A> Stream<Indexed<A>> zipWithIndex(Stream<? extends A> a) {
+		if (a.isParallel()) {
+			throw new IllegalArgumentException("Stream must be sequencial");
+		}
+		return zip(a, Stream.iterate(0, i->i+1), (e, i) -> new Indexed<>(e, i));
+	}
+
+	private static List<NameValuePair> toPairs(List<NameValuePair> identity, Stream<SupplierForParameter> stream) {
+		final BinaryOperator<List<NameValuePair>> merge2Lists = (list1, list2) -> {
+			List<NameValuePair> copy = new ArrayList<>(list1);
+			copy.addAll(list2);
+			return copy;
+		};
+		
+		return stream
+				.map(OptionalForParameter::from)
+				.filter(Optional::isPresent)
+				.map(Optional::get)
+				.map(p -> (NameValuePair) new BasicNameValuePair(p.parameter, p.value))
+				.map(Arrays::asList)
+				.reduce(identity, merge2Lists);
+	}
+
+	/* Build call for createOrder */
+	@SuppressWarnings("all")
+	private HttpUriRequest createOrderCall(final AluRequest request) throws ApiException {
+		final List<NameValuePair> formParams = toPairs(new ArrayList<>(), Stream.of(
+				of("MERCHANT", ()->request.getMerchant().getKey()),
+				of("ORDER_REF", request::getOrderRef),
+				of("ORDER_DATE", () -> ofNullable(request.getOrderDate()).orElse(OffsetDateTime.now()), d->formatter.format(d)),
+				of("PAY_METHOD", ()->ofNullable(request.getPayMethod()).orElse(AluRequest.PayMethodEnum.CCVISAMC), e->e.toString()),
+				of("BACK_REF", ()->request.getContinueUri()),
+				of("CC_NUMBER", ()->request.getPaymentOptions().getCreditCard().getCcNumber()),
+				of("EXP_MONTH", ()->request.getPaymentOptions().getCreditCard().getExpMonth(), i->Integer.toString(i)),
+				of("EXP_YEAR", ()->request.getPaymentOptions().getCreditCard().getExpYear(), i->Integer.toString(i)),
+				of("CC_CVV", ()->request.getPaymentOptions().getCreditCard().getCvv()),
+				of("CC_OWNER", ()->request.getPaymentOptions().getCreditCard().getCcOwner()),
+				of("CC_TOKEN", ()->request.getPaymentOptions().getToken().getCcToken()),
+				of("SELECTED_INSTALLMENTS_NUMBER", ()->request.getPaymentOptions().getInstallments().getNumberOfInstallments(), i->Integer.toString(i)),
+				of("CARD_PROGRAM_NAME", ()->request.getPaymentOptions().getInstallments().getCardProgramName()),
+				of("ORDER_TIMEOUT", ()->request.getOrderTimeout(), i->Integer.toString(i)),
+				of("USE_LOYALTY_POINTS", ()->request.getPaymentOptions().getLoyaltyPoints(), p -> "YES"),
+				of("LOYALTY_POINTS_AMOUNT", ()->request.getPaymentOptions().getLoyaltyPoints().getAmount(), d->Double.toString(d)),
+				of("CAMPAIGN_TYPE", ()->request.getPaymentOptions().getInstallments().getCampaignType(), e->e.toString()),
+				of("ORDER_SHIPPING", ()->request.getShipping().getCost(), c->c.toString()),
+				of("POS_CODE", ()->request.getPosCode()),
+				of("BILL_LNAME", ()->request.getBilling().getContactPerson().getLastName()),
+				of("BILL_FNAME", ()->request.getBilling().getContactPerson().getFirstName()),
+				of("BILL_EMAIL", ()->request.getBilling().getContactPerson().getEmail()),
+				of("BILL_PHONE", ()->request.getBilling().getContactPerson().getPhone()),
+				of("BILL_COUNTRYCODE", ()->request.getBilling().getAddress().getCountryCode()),
+				of("BILL_CITYPE", ()->request.getBilling().getDocumentId().getDocumentType(), e->e.toString()),
+				of("BILL_CINUMBER", ()->request.getBilling().getDocumentId().getDocumentNumber()),
+				of("BILL_FAX", ()->request.getBilling().getFax()),
+				of("BILL_ADDRESS", ()->request.getBilling().getAddress().getAddressLine()),
+				of("BILL_ADDRESS2", ()->request.getBilling().getAddress().getAddressLine1()),
+				of("BIL_ZIPCODE", ()->request.getBilling().getAddress().getZipCode()),
+				of("BILL_CITY", ()->request.getBilling().getAddress().getCity()),
+				of("BILL_STATE", ()->request.getBilling().getAddress().getState()),
+				of("DELIVERY_LNAME", ()->request.getDelivery().getContactPerson().getLastName()),
+				of("DELIVERY_FNAME", ()->request.getDelivery().getContactPerson().getFirstName()),
+				of("DELIVERY_EMAIL", ()->request.getDelivery().getContactPerson().getEmail()),
+				of("DELIVERY_PHONE", ()->request.getDelivery().getContactPerson().getPhone()),
+				of("DELIVERY_COMPANY", ()->request.getDelivery().getCompany()),
+				of("DELIVERY_ADDRESS", ()->request.getDelivery().getAddress().getAddressLine()),
+				of("DELIVERY_ADDRESS2", ()->request.getDelivery().getAddress().getAddressLine1()),
+				of("DELIVERY_ZIPCODE", ()->request.getDelivery().getAddress().getZipCode()),
+				of("DELIVERY_CITY", ()->request.getDelivery().getAddress().getCity()),
+				of("DELIVERY_STATE", ()->request.getDelivery().getAddress().getState()),
+				of("DELIVERY_COUNTRYCODE", ()->request.getDelivery().getAddress().getCountryCode()),
+				of("LU_ENABLE_TOKEN", ()->request.getPaymentOptions().getCreditCard().getEnableToken(), t-> t ? "1" : null),
+				of("LU_TOKEN_TYPE", ()->request.getPaymentOptions().getCreditCard().getEnableToken(), t-> t ? "PAY_BY_CLICK" : null),
+				of("CC_NUMBER_TIME", ()->request.getPaymentOptions().getCreditCard().getCcNumberTime()),
+				of("CC_OWNER_TIME", ()->request.getPaymentOptions().getCreditCard().getCcOwnerTime()),
+				of("CLIENT_IP", ()->request.getClientIp()),
+				of("CLIENT_TIME", ()->ofNullable(request.getClientTime()).orElse(OffsetDateTime.now()), t->formatter.format(t)),
+				of("PRICES_CURRENCY", ()->request.getCurrency())));
+
+		final List<NameValuePair> formParams2 = toPairs(formParams, zipWithIndex(request.getOrderItems().stream())
+			.flatMap(i -> {
+				return Stream.of(
+					of(String.format("ORDER_PNAME[%d]", i.index), ()->i.t.getName()),
+					of(String.format("ORDER_PCODE[%d]", i.index), ()->i.t.getCode()),
+					of(String.format("ORDER_PRICE[%d]", i.index), ()->i.t.getPrice(), d->d.toString()),
+					of(String.format("ORDER_VAT[%d]", i.index), ()->i.t.getVat(), d->d.toString()),
+					of(String.format("ORDER_PRICE_TYPE[%d]", i.index), ()->i.t.getPriceType(), e->e.toString()),
+					of(String.format("ORDER_QTY[%d]", i.index), ()->i.t.getQuantity(), _i->Integer.toString(_i)),
+					of(String.format("ORDER_PINFO[%d]", i.index), ()->i.t.getInfo()),
+					of(String.format("ORDER_VER[%d]", i.index), ()->i.t.getVersion()));
+			}));
+
+		resolve(() -> request.getMerchant().getSecretKey())
+			.map(key -> key.getBytes(StandardCharsets.UTF_8))
+			.map(secretKey -> new Hashing.HashConfiguration("HmacMD5", secretKey, true, true, "alphabetically", java.util.Arrays.<String>asList(), java.util.Arrays.<String>asList()))
+			.map(cfg -> new Hashing().calculateHash(formParams2, cfg))
+			.ifPresent(hash -> {
+				formParams2.add(new BasicNameValuePair("ORDER_HASH", hash));
+			});
+		
+		HttpPost req = new HttpPost(targetURI);
+		req.addHeader(new BasicHeader(HttpHeaders.ACCEPT, "application/xml; text/xml"));
+		try {
+			req.setEntity(new UrlEncodedFormEntity(formParams2));
+			return req;
+		} catch (IOException e) {
+			throw new ApiException(e);
+		}
+	}
+
+	/**
+	 * Create a new order via ALU v3
+	 *
+	 * @param aluRequest The ALU request object
+	 * @return AluResponse
+	 * @throws ApiException If fail to call the API, e.g. server error or cannot deserialize the response body
+	 */
+	public AluResponse createOrder(final AluRequest aluRequest) throws ApiException {
+		return createOrderWithHttpInfo(aluRequest).getData();
+	}
+
+	/**
+	 * Create a new order via ALU v3
+	 *
+	 * @param aluRequest The ALU request object
+	 * @return ApiResponse&lt;AluResponse&gt;
+	 * @throws ApiException If fail to call the API, e.g. server error or cannot deserialize the response body
+	 */
+	public ApiResponse<AluResponse> createOrderWithHttpInfo(final AluRequest aluRequest) throws ApiException {
+		try {
+			final HttpUriRequest request = createOrderCall(aluRequest);
+			final HttpResponse resp = apiClient.execute(request);
+
+			if (resp.getStatusLine().getStatusCode() == 200) {
+				final AluResponseRaw raw = mapper.readerFor(AluResponseRaw.class).readValue(resp.getEntity().getContent());
+
+				final AluResponse response = new AluResponse()
+					.refNum(raw.getREFNO())
+					.status(resolve(() -> AluResponse.StatusEnum.valueOf(raw.getSTATUS().toString())).orElse(null))
+					.returnCode(resolve(() -> AluResponse.ReturnCodeEnum.byValue(raw.getRETURNCODE())).orElse(null))
+					.returnMessage(raw.getRETURNMESSAGE())
+					.amount(raw.getAMOUNT())
+					.currency(raw.getCURRENCY())
+					.installmentsNum(raw.getINSTALLMENTSNO())
+					.cardProgramName(raw.getCARDPROGRAMNAME())
+					.completeTxnRedirectUri(raw.getURLREDIRECT())
+					.cardProgramName(raw.getCARDPROGRAMNAME())
+					.orderRef(raw.getORDERREF())
+					.txnRefNo(raw.getTXREFNO())
+					.tokenHash(raw.getTOKENHASH())
+					.completeTxnRedirectUri(raw.getURLREDIRECT())
+					.continueUri3Ds(raw.getURL3DS());
+
+				return new ApiResponse<>(
+					resp.getStatusLine().getStatusCode(),
+					Collections.emptyMap(),
+					response);
+			} else {
+				final String msg = "Could not create order, status was %d";
+				throw new ApiException(String.format(msg, resp.getStatusLine().getStatusCode()));
+			}
+		} catch (IOException e) {
+			throw new ApiException(e);
+		}
+	}
+}

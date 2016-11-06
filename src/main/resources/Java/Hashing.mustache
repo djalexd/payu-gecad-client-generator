@@ -1,20 +1,12 @@
-{{> licenceInfo}}
+{{> licenceInfo }}
 
-package {{invokerPackage}};
+package {{ invokerPackage }};
 
-import {{modelPackage}}.Merchant;
-import java.time.OffsetDateTime;
-import java.time.format.DateTimeFormatter;
+import org.apache.http.NameValuePair;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -22,25 +14,21 @@ import java.util.stream.Stream;
 public final class Hashing {
 	public Hashing() {}
 
-	private static ThreadLocal<Merchant> merchantHolder = new ThreadLocal<>();
-
-	public static void configureMerchant(Merchant merchant) {
-		merchantHolder.set(merchant);
-	}
-	
 	/**
 	 * Utility class used to calculate the HASH.
 	 */
 	public static class HashConfiguration {
 		String algorithm;
+		byte[] secretKey;
 		boolean includeEmptyParameters;
 		boolean includeParamsLength;
 		String parameterOrder;
 		List<String> parameters;
 		List<String> skipParameters;
 
-		public HashConfiguration(String algorithm, boolean includeEmptyParameters, boolean includeParamsLength, String parameterOrder, List<String> parameters, List<String> skipParameters) {
+		public HashConfiguration(String algorithm, byte[] secretKey, boolean includeEmptyParameters, boolean includeParamsLength, String parameterOrder, List<String> parameters, List<String> skipParameters) {
 			this.algorithm = algorithm;
+			this.secretKey = secretKey;
 			this.includeEmptyParameters = includeEmptyParameters;
 			this.includeParamsLength = includeParamsLength;
 			this.parameterOrder = parameterOrder;
@@ -52,22 +40,21 @@ public final class Hashing {
 	/**
 	 * Calculates the hash based on source object and configuration.
 	 */
-	public String calculateHash(final Map<String, Object> source, final ApiClient client, final HashConfiguration cfg) {
+	public String calculateHash(final List<NameValuePair> source, final HashConfiguration cfg) {
 
-		if (merchantHolder.get() == null) {
-			throw new IllegalStateException("There is no configured merchantHolder, call Hashing#configureMerchant(...) method");
+		if (cfg.secretKey == null) {
+			throw new IllegalStateException("There is no configured secretKey");
 		}
 
 		final String strToSign = source
-				.entrySet()
 				.stream()
 				.sorted((o1, o2) -> {
 					if ("alphabetically".equalsIgnoreCase(cfg.parameterOrder)) {
-						return o1.getKey().compareTo(o2.getKey());
+						return o1.getName().compareTo(o2.getName());
 					} else if ("fixed".equalsIgnoreCase(cfg.parameterOrder)) {
 						// Order is imposed by 'parameters' list. What is not
 						// defined there goes to the end of the list, unordered.
-						int index1 = cfg.parameters.indexOf(o1.getKey()), index2 = cfg.parameterOrder.indexOf(o2.getKey());
+						int index1 = cfg.parameters.indexOf(o1.getName()), index2 = cfg.parameterOrder.indexOf(o2.getName());
 						if (index1 > -1) {
 							if (index2 > -1) {
 								// compare the 2 indices.
@@ -90,9 +77,8 @@ public final class Hashing {
 					}
 				})
 				.filter(e -> e.getValue() != null)
-				.filter( e -> !cfg.skipParameters.contains(e.getKey()))
-				.map(Map.Entry::getValue)
-				.map(client::parameterToString)
+				.filter( e -> !cfg.skipParameters.contains(e.getName()))
+				.map(NameValuePair::getValue)
 				.map(s -> cfg.includeParamsLength ? s.length() + s : s)
 				.flatMap(s -> {
 					if (s.isEmpty() && !cfg.includeEmptyParameters) {
@@ -103,7 +89,7 @@ public final class Hashing {
 				}).collect(Collectors.joining());
 
 		try {
-			final SecretKeySpec signingKey = new SecretKeySpec(merchantHolder.get().getSecretKey().getBytes(StandardCharsets.UTF_8), cfg.algorithm);
+			final SecretKeySpec signingKey = new SecretKeySpec(cfg.secretKey, cfg.algorithm);
 			final Mac mac = Mac.getInstance(cfg.algorithm);
 			mac.init(signingKey);
 			// compute the hmac on input data bytes

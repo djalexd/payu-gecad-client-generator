@@ -1,0 +1,150 @@
+{{>licenceInfo }}
+
+package {{ apiPackage }};
+
+import {{invokerPackage}}.ApiException;
+import {{modelPackage}}.Address;
+import {{modelPackage}}.AluPaymentOption;
+import {{modelPackage}}.AluRequest;
+import {{modelPackage}}.AluResponse;
+import {{modelPackage}}.Billing;
+import {{modelPackage}}.CardPaymentOption;
+import {{modelPackage}}.ContactPerson;
+import {{modelPackage}}.InstallmentsPaymentOption;
+import {{modelPackage}}.LoyaltyPointsPaymentOption;
+import {{modelPackage}}.Merchant;
+import {{modelPackage}}.OrderItem;
+import {{modelPackage}}.TokenizedCardPaymentOption;
+import org.junit.Ignore;
+import org.junit.Test;
+
+import java.math.BigDecimal;
+import java.net.URI;
+import java.util.UUID;
+import java.util.logging.Logger;
+
+import static java.util.Optional.of;
+import static java.util.Optional.ofNullable;
+
+/**
+ * API tests for AluApi
+ */
+public class AluApiTest {
+	
+	private static final Logger log = Logger.getLogger(AluApiTest.class.getName());
+
+	private static final String DEFAULT_CC_NUMBER = "4111111111111111";
+	private final AluApi api = buildApi();
+
+	private static AluApi buildApi() {
+		return new AluApiBuilder()
+				.withTarget(URI.create("https://secure.payu.ro/order/alu/v3"))
+				.build();
+	}
+	
+	private AluRequest someBaseAluRequest() {
+		ContactPerson customer = new ContactPerson()
+				.firstName("John")
+				.lastName("Doe")
+				.email("john-doe@example.com")
+				.phone("+491234567890");
+		Address someAddress = new Address()
+				.city("Berlin")
+				.countryCode("DE");
+		return new AluRequest()
+				.merchant(new Merchant()
+						.key(ofNullable(System.getProperty("merchant_key")).orElseThrow(() -> new ApiException("Cannot read system property 'merchant_key'")))
+						.secretKey(ofNullable(System.getProperty("merchant_secret_key")).orElseThrow(() -> new ApiException("Cannot read system property 'merchant_secret_key'"))))
+				.orderRef(UUID.randomUUID().toString())
+				.billing(new Billing()
+						.contactPerson(customer)
+						.address(someAddress))
+				.currency("EUR")
+				.addOrderItemsItem(new OrderItem()
+						.price(BigDecimal.valueOf(100))
+						.quantity(1)
+						.code("GI")
+						.name("Generic item"))
+				.paymentOptions(new AluPaymentOption());
+	}
+
+	@Ignore
+    @Test
+    public void createOrderTestWithCard() {
+        // given
+	    final AluRequest q = someBaseAluRequest();
+		q.getPaymentOptions().creditCard(new CardPaymentOption()
+				.ccNumber(DEFAULT_CC_NUMBER)
+				.cvv("100")
+				.expYear(2019)
+				.expMonth(6));
+        // when
+        final AluResponse resp = api.createOrder(q);
+        // then
+		log.info(resp.toString());
+    }
+
+	@Ignore
+	@Test
+	public void createOrderTestWithCard3ds() {
+		// given
+		final AluRequest q = someBaseAluRequest();
+		q.getPaymentOptions().creditCard(new CardPaymentOption()
+				.ccNumber(DEFAULT_CC_NUMBER)
+				.cvv("100")
+				.expYear(2019)
+				.expMonth(12));
+		// when
+		final AluResponse resp = api.createOrder(q);
+		// then
+		log.info(resp.toString());
+	}
+	
+	@Ignore
+	@Test
+	public void createOrderTestWithInstallments() {
+		// given
+		final AluRequest q = someBaseAluRequest();
+		q.getPaymentOptions()
+				.installments(new InstallmentsPaymentOption().numberOfInstallments(6));
+		q.payMethod(AluRequest.PayMethodEnum.TINKOFF_LOAN)
+		 .currency("RUB");
+		// when
+		final AluResponse resp = api.createOrder(q);
+		// then
+		log.info(resp.toString());
+	}
+	
+	@Ignore
+	@Test
+	public void createOrderTestWithCardToken() {
+		// given - create the token.
+		final AluResponse responseWithToken = api.createOrder(someBaseAluRequest().paymentOptions(
+				new AluPaymentOption().creditCard(new CardPaymentOption()
+						.ccNumber(DEFAULT_CC_NUMBER)
+						.cvv("100")
+						.expYear(2019)
+						.expMonth(6)
+						.enableToken(true))));
+		// when
+		AluRequest q = someBaseAluRequest();
+		q.paymentOptions(new AluPaymentOption().token(new TokenizedCardPaymentOption()
+				.ccToken(responseWithToken.getTokenHash())))
+				.payMethod(AluRequest.PayMethodEnum.CCVISAMC);
+		AluResponse resp = api.createOrder(q);
+		// then
+		log.info(resp.toString());
+	}
+	
+	@Ignore
+	@Test
+	public void createOrderTestWithLoyaltyPoints() {
+		// given
+		final AluRequest q = someBaseAluRequest();
+		q.getPaymentOptions().loyaltyPoints(new LoyaltyPointsPaymentOption().amount(100.0));
+		// when
+		final AluResponse resp = api.createOrder(q);
+		// then
+		log.info(resp.toString());
+	}
+}

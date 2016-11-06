@@ -9,25 +9,42 @@ import io.swagger.codegen.languages.JavaClientCodegen;
  * Adds necessary support files, nothing more.
  */
 public class PayUGecadJavaClientCodegen extends JavaClientCodegen {
+	public PayUGecadJavaClientCodegen() {
+		supportedLibraries.put("httpclient-jackson", "Apache components HttpClient + Jackson mapper");
+	}
+
+	@Override
+	public String getLibrary() {
+		return "httpclient-jackson";
+	}
+
 	@Override
 	public void processOpts() {
 		super.processOpts();
 
-		additionalProperties.put("gson", "false");
+		additionalProperties.remove("gson");
 		additionalProperties.put("jackson", "true");
 
 		supportingFiles.clear();
 		final String invokerFolder = (sourceFolder + '/' + invokerPackage).replace(".", "/");
 		final String modelFolder = (sourceFolder + '/' + modelPackage).replace(".", "/");
+		final String apiFolder = (sourceFolder + '/' + apiPackage).replace(".", "/");
 
-		writeOptional(outputFolder, new SupportingFile("pom.mustache", "", "pom.xml"));
+		writeOptional(outputFolder, new SupportingFile("pom.xml.mustache", "", "pom.xml"));
 		writeOptional(outputFolder, new SupportingFile("README.mustache", "", "README.md"));
 		supportingFiles.add(new SupportingFile("ApiResponse.mustache", invokerFolder, "ApiResponse.java"));
 		supportingFiles.add(new SupportingFile("ApiException.mustache", invokerFolder, "ApiException.java"));
 		supportingFiles.add(new SupportingFile("Hashing.mustache", invokerFolder, "Hashing.java"));
 		supportingFiles.add(new SupportingFile("UTCDateTimeAdapter.mustache", modelFolder, "UTCDateTimeAdapter.java"));
-
+		
+		supportingFiles.add(new SupportingFile("AluApiBuilder.mustache", apiFolder, "AluApiBuilder.java"));
+		supportingFiles.add(new SupportingFile("AluApi.mustache", apiFolder, "AluApi.java"));
+		
+		final String testFolder = (this.testFolder + '/' + apiPackage).replace(".", "/");
+		supportingFiles.add(new SupportingFile("AluApiTest.mustache", testFolder, "AluApiTest.java"));
 		importMapping.put("Stream", "java.util.stream.Stream");
+		apiTemplateFiles.clear();
+		apiTestTemplateFiles().clear();
 	}
 
 	@Override

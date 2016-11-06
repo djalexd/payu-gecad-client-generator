@@ -35,62 +35,6 @@ import {{invokerPackage}}.Hashing;
 
 public class Alu {
 
-	private static final ApiClient client = new ApiClient();
-	static {
-		client.setVerifyingSsl(false);
-		client.setDebugging(true);
-		client.setDateTimeFormat(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.of("UTC")));
-		client.setBasePath("https://sandbox11ru.epayment.ro");
-	}
-
-	public static void main(String[] args) throws ApiException {
-		final Merchant superman = new Merchant().key("Superman").secretKey("krypton");
-		Hashing.configureMerchant(superman);
-
-		final Alu api = new Alu(client);
-
-		final ContactPerson customer = new ContactPerson()
-				.firstName("General")
-				.lastName("Zod")
-				.email("zod@krypton.org")
-				.phone("+1234567890");
-		final Address customerAddress = new Address()
-				.addressLine("Star X")
-				.countryCode("US")
-				.zipCode("00000")
-				.state("NY")
-				.city("New York");
-
-		final AluRequest request = new AluRequest()
-				.merchant(superman)
-				.orderRef(UUID.randomUUID().toString())
-				.payMethod(AluRequest.PayMethodEnum.CCVISAMC)
-				.currency("KRY")
-				.orderItems(Collections.singletonList(
-						new OrderItem()
-								.name("Standard general purpose computer")
-								.code("PC")
-								.price(BigDecimal.valueOf(1251.14))
-								.quantity(1)
-				))
-				.billing(new Billing()
-						.contactPerson(customer)
-						.address(customerAddress))
-				.paymentOptions(new AluPaymentOption()
-					.creditCard(new CardPaymentOption()
-						.ccNumber("4111111111111111")
-						.cvv("012")
-						.expMonth(12)
-						.expYear(2020)
-					))
-				.delivery(new Delivery()
-					.contactPerson(customer)
-					.address(customerAddress));
-
-		final AluResponse response = api.createOrder(request);
-		System.out.println(response);
-	}
-
 	private final DefaultApi api;
 
 	public Alu(ApiClient apiClient) {

@@ -4,18 +4,20 @@ package {{modelPackage}};
 
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
 public class UTCDateTimeAdapter extends XmlAdapter<String, OffsetDateTime> {
 
-	private final DateTimeFormatter fmt = DateTimeFormatter
+	private static final DateTimeFormatter fmt = DateTimeFormatter
 			.ofPattern("yyyy-MM-dd HH:mm:ss")
 			.withZone(ZoneId.of("UTC"));
 
 	@Override
 	public OffsetDateTime unmarshal(String v) throws Exception {
-		return OffsetDateTime.from(fmt.parse(v));
+		LocalDateTime dt = LocalDateTime.from(fmt.parse(v));
+		return dt.atOffset(ZoneOffset.UTC);
 	}
 
 	@Override

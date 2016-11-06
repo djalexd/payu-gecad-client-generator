@@ -1267,7 +1267,15 @@ definitions:
           - WRONG_VERSION
           - INVALID_CC_TOKEN
           - INSTALLMENTS_LOYALTY_POINTS_INCOMPATIBLE
-        # TODO add some details for enum above!
+          - INVALID_EXTERNAL_REFERENCE
+          - LOYALTY_POINTS_NOT_AVAILABLE
+          - PENDING_AUTHORIZATION
+          - LOYALTY_POINTS_AMOUNT_INVALID
+          - UNKNOWN
+      returnMessage:
+        type: string
+        description: |
+          A more detailed description of the response code
       continueUri3Ds:
         type: string
         description: |
